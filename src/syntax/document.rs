@@ -136,4 +136,24 @@ fn parse() {
             TEXT@21..31 "*heading 1"
     "###
     );
+
+    insta::assert_debug_snapshot!(
+        to_document("* A\n\n* B\n").syntax,
+        @r###"
+    DOCUMENT@0..9
+      HEADLINE@0..5
+        HEADLINE_STARS@0..1 "*"
+        WHITESPACE@1..2 " "
+        HEADLINE_TITLE@2..3
+          TEXT@2..3 "A"
+        NEW_LINE@3..4 "\n"
+        BLANK_LINE@4..5 "\n"
+      HEADLINE@5..9
+        HEADLINE_STARS@5..6 "*"
+        WHITESPACE@6..7 " "
+        HEADLINE_TITLE@7..8
+          TEXT@7..8 "B"
+        NEW_LINE@8..9 "\n"
+    "###
+    );
 }

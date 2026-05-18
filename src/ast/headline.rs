@@ -1,4 +1,5 @@
 use rowan::{ast::AstNode, NodeOrToken};
+use std::iter::successors;
 
 use crate::{syntax::SyntaxKind, SyntaxElement};
 
@@ -272,5 +273,61 @@ impl Headline {
                     .find(|children| children.kind() == SyntaxKind::DRAWER_CONTENT)
             })
             .flat_map(|x| x.children().filter_map(Clock::cast))
+    }
+
+    /// Returns the number of blank lines between this headline and its contents
+    ///
+    /// Matches Org's `:pre-blank`.  Blank lines under a headline with no
+    /// contents count toward [`Headline::post_blank`] instead.
+    ///
+    /// ```rust
+    /// use orgize::{Org, ast::Headline};
+    ///
+    /// let pre_blank = |input: &str| {
+    ///     Org::parse(input).first_node::<Headline>().map(|hdl| hdl.pre_blank())
+    /// };
+    ///
+    /// assert_eq!(pre_blank("* Heading\n\nParagraph.\n"), Some(1));
+    /// assert_eq!(pre_blank("* Heading\n\n** Child\n"), Some(1));
+    /// assert_eq!(pre_blank("* A\n\n* B\n"), Some(0));
+    /// assert_eq!(pre_blank("* A\nSCHEDULED: <2019-04-08 Mon>\n\ntext"), Some(0));
+    /// ```
+    pub fn pre_blank(&self) -> usize {
+        let has_contents = self.section().is_some() || self.headlines().next().is_some();
+        if has_contents {
+            self.syntax
+                .children_with_tokens()
+                .skip_while(|element| element.kind() != SyntaxKind::NEW_LINE)
+                .skip(1)
+                .take_while(|element| element.kind() == SyntaxKind::BLANK_LINE)
+                .count()
+        } else {
+            0
+        }
+    }
+
+    /// Returns the number of blank lines at the end of this headline's subtree
+    ///
+    /// Matches Org's `:post-blank`.  Blank lines held by the last paragraph or
+    /// child headline count too.
+    ///
+    /// ```rust
+    /// use orgize::{Org, ast::Headline};
+    ///
+    /// let post_blank = |input: &str| {
+    ///     Org::parse(input).first_node::<Headline>().map(|hdl| hdl.post_blank())
+    /// };
+    ///
+    /// assert_eq!(post_blank("* Heading\n\nParagraph.\n"), Some(0));
+    /// assert_eq!(post_blank("* Heading\n\n** Child\n"), Some(0));
+    /// assert_eq!(post_blank("* A\n\n* B\n"), Some(1));
+    /// assert_eq!(post_blank("* A\ntext\n\n* B\n"), Some(1));
+    /// ```
+    pub fn post_blank(&self) -> usize {
+        // The walk cannot leave this headline.  Its first token is
+        // HEADLINE_STARS, which ends the count.
+        successors(self.syntax.last_token(), |token| token.prev_token())
+            .take_while(|token| token.kind() == SyntaxKind::BLANK_LINE)
+            .count()
     }
 }

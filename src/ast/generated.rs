@@ -209,9 +209,6 @@ impl Headline {
     pub fn headlines(&self) -> AstChildren<Headline> {
         support::children(&self.syntax)
     }
-    pub fn post_blank(&self) -> usize {
-        super::blank_lines(&self.syntax)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

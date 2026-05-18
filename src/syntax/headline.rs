@@ -9,8 +9,8 @@ use nom::{
 
 use super::{
     combinator::{
-        hash_token, l_bracket_token, line_starts_iter, node, r_bracket_token, token, trim_line_end,
-        GreenElement, NodeBuilder,
+        blank_lines, hash_token, l_bracket_token, line_starts_iter, node, r_bracket_token, token,
+        trim_line_end, GreenElement, NodeBuilder,
     },
     drawer::property_drawer_node,
     element::element_nodes,
@@ -76,6 +76,9 @@ fn headline_node_base(input: Input) -> IResult<Input, GreenElement, ()> {
 
     let (input, property_drawer) = opt(property_drawer_node)(input)?;
     b.push_opt(property_drawer);
+
+    let (input, blank) = blank_lines(input)?;
+    b.children.extend(blank);
 
     if input.is_empty() {
         return Ok((input, b.finish(HEADLINE)));
@@ -260,14 +263,86 @@ fn parse() {
       HEADLINE_TITLE@2..5
         TEXT@2..5 "foo"
       NEW_LINE@5..6 "\n"
-      SECTION@6..7
-        PARAGRAPH@6..7
-          BLANK_LINE@6..7 "\n"
+      BLANK_LINE@6..7 "\n"
       HEADLINE@7..13
         HEADLINE_STARS@7..9 "**"
         WHITESPACE@9..10 " "
         HEADLINE_TITLE@10..13
           TEXT@10..13 "bar"
+    "###
+    );
+
+    insta::assert_debug_snapshot!(
+        to_headline("* foo\n\nbar\n").syntax,
+        @r###"
+    HEADLINE@0..11
+      HEADLINE_STARS@0..1 "*"
+      WHITESPACE@1..2 " "
+      HEADLINE_TITLE@2..5
+        TEXT@2..5 "foo"
+      NEW_LINE@5..6 "\n"
+      BLANK_LINE@6..7 "\n"
+      SECTION@7..11
+        PARAGRAPH@7..11
+          TEXT@7..11 "bar\n"
+    "###
+    );
+
+    insta::assert_debug_snapshot!(
+        to_headline("* foo\nSCHEDULED: <2019-04-08 Mon>\n\nbar").syntax,
+        @r###"
+    HEADLINE@0..38
+      HEADLINE_STARS@0..1 "*"
+      WHITESPACE@1..2 " "
+      HEADLINE_TITLE@2..5
+        TEXT@2..5 "foo"
+      NEW_LINE@5..6 "\n"
+      PLANNING@6..34
+        PLANNING_SCHEDULED@6..33
+          TEXT@6..16 "SCHEDULED:"
+          WHITESPACE@16..17 " "
+          TIMESTAMP_ACTIVE@17..33
+            L_ANGLE@17..18 "<"
+            TIMESTAMP_YEAR@18..22 "2019"
+            MINUS@22..23 "-"
+            TIMESTAMP_MONTH@23..25 "04"
+            MINUS@25..26 "-"
+            TIMESTAMP_DAY@26..28 "08"
+            WHITESPACE@28..29 " "
+            TIMESTAMP_DAYNAME@29..32 "Mon"
+            R_ANGLE@32..33 ">"
+        NEW_LINE@33..34 "\n"
+      BLANK_LINE@34..35 "\n"
+      SECTION@35..38
+        PARAGRAPH@35..38
+          TEXT@35..38 "bar"
+    "###
+    );
+
+    // Org reads a planning line only directly under the headline line.
+    insta::assert_debug_snapshot!(
+        to_headline("* foo\n\nSCHEDULED: <2019-04-08 Mon>").syntax,
+        @r###"
+    HEADLINE@0..34
+      HEADLINE_STARS@0..1 "*"
+      WHITESPACE@1..2 " "
+      HEADLINE_TITLE@2..5
+        TEXT@2..5 "foo"
+      NEW_LINE@5..6 "\n"
+      BLANK_LINE@6..7 "\n"
+      SECTION@7..34
+        PARAGRAPH@7..34
+          TEXT@7..18 "SCHEDULED: "
+          TIMESTAMP_ACTIVE@18..34
+            L_ANGLE@18..19 "<"
+            TIMESTAMP_YEAR@19..23 "2019"
+            MINUS@23..24 "-"
+            TIMESTAMP_MONTH@24..26 "04"
+            MINUS@26..27 "-"
+            TIMESTAMP_DAY@27..29 "08"
+            WHITESPACE@29..30 " "
+            TIMESTAMP_DAYNAME@30..33 "Mon"
+            R_ANGLE@33..34 ">"
     "###
     );
 

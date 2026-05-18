@@ -30,7 +30,6 @@ const nodes = [
       ["properties", "PropertyDrawer"],
     ],
     children: [["headlines", "Headline"]],
-    post_blank: true,
   },
   {
     struct: "PropertyDrawer",
