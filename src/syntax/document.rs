@@ -156,4 +156,39 @@ fn parse() {
         NEW_LINE@8..9 "\n"
     "###
     );
+
+    insta::assert_debug_snapshot!(
+        to_document("* A\nSCHEDULED: <2019-04-08 Mon>\n\n* B\n").syntax,
+        @r###"
+    DOCUMENT@0..37
+      HEADLINE@0..33
+        HEADLINE_STARS@0..1 "*"
+        WHITESPACE@1..2 " "
+        HEADLINE_TITLE@2..3
+          TEXT@2..3 "A"
+        NEW_LINE@3..4 "\n"
+        PLANNING@4..33
+          PLANNING_SCHEDULED@4..31
+            TEXT@4..14 "SCHEDULED:"
+            WHITESPACE@14..15 " "
+            TIMESTAMP_ACTIVE@15..31
+              L_ANGLE@15..16 "<"
+              TIMESTAMP_YEAR@16..20 "2019"
+              MINUS@20..21 "-"
+              TIMESTAMP_MONTH@21..23 "04"
+              MINUS@23..24 "-"
+              TIMESTAMP_DAY@24..26 "08"
+              WHITESPACE@26..27 " "
+              TIMESTAMP_DAYNAME@27..30 "Mon"
+              R_ANGLE@30..31 ">"
+          NEW_LINE@31..32 "\n"
+          BLANK_LINE@32..33 "\n"
+      HEADLINE@33..37
+        HEADLINE_STARS@33..34 "*"
+        WHITESPACE@34..35 " "
+        HEADLINE_TITLE@35..36
+          TEXT@35..36 "B"
+        NEW_LINE@36..37 "\n"
+    "###
+    );
 }

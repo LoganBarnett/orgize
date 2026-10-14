@@ -306,10 +306,10 @@ impl Headline {
         }
     }
 
-    /// Returns the number of blank lines at the end of this headline's subtree
+    /// Returns the number of blank lines at the end of this headline
     ///
-    /// Matches Org's `:post-blank`.  Blank lines held by the last paragraph or
-    /// child headline count too.
+    /// Matches Org's `:post-blank`.  Blank lines after the last paragraph or
+    /// child headline belong to that element.
     ///
     /// ```rust
     /// use orgize::{Org, ast::Headline};
@@ -321,13 +321,66 @@ impl Headline {
     /// assert_eq!(post_blank("* Heading\n\nParagraph.\n"), Some(0));
     /// assert_eq!(post_blank("* Heading\n\n** Child\n"), Some(0));
     /// assert_eq!(post_blank("* A\n\n* B\n"), Some(1));
-    /// assert_eq!(post_blank("* A\ntext\n\n* B\n"), Some(1));
+    /// assert_eq!(post_blank("* A\ntext\n\n* B\n"), Some(0));
     /// ```
     pub fn post_blank(&self) -> usize {
-        // The walk cannot leave this headline.  Its first token is
-        // HEADLINE_STARS, which ends the count.
-        successors(self.syntax.last_token(), |token| token.prev_token())
-            .take_while(|token| token.kind() == SyntaxKind::BLANK_LINE)
-            .count()
+        successors(self.syntax.last_child_or_token(), |element| {
+            element.prev_sibling_or_token()
+        })
+        .take_while(|element| element.kind() == SyntaxKind::BLANK_LINE)
+        .count()
+    }
+}
+
+#[test]
+fn blank_lines_match_org() {
+    use crate::Org;
+
+    // Expected values come from Org 9.7.39 in Emacs 30.2.
+    let rows = [
+        ("* Heading\n\nParagraph.\n", "Heading", 1, 0),
+        ("* Heading\n\n** Child\n", "Heading", 1, 0),
+        ("* Heading\n\n** Child\n", "Child", 0, 0),
+        ("* A\n\n* B\n", "A", 0, 1),
+        ("* A\ntext\n\n* B\n", "A", 0, 0),
+        ("* A\n** B\n\n* C\n", "A", 0, 0),
+        ("* A\n** B\n\n* C\n", "B", 0, 1),
+        ("* A\n\n\n", "A", 0, 2),
+        ("* A\n\ntext\n\n\n* B\n", "A", 1, 0),
+        ("* A\nSCHEDULED: <2019-04-08 Mon>\n\ntext\n", "A", 0, 0),
+        ("* A\nSCHEDULED: <2019-04-08 Mon>\n\n* B\n", "A", 0, 0),
+        ("* A\n:PROPERTIES:\n:ID: x\n:END:\n\n* B\n", "A", 0, 0),
+        (
+            "* A\nSCHEDULED: <2019-04-08 Mon>\n:PROPERTIES:\n:ID: x\n:END:\n\n* B\n",
+            "A",
+            0,
+            0,
+        ),
+        (
+            "* A\nSCHEDULED: <2019-04-08 Mon>\n\n:PROPERTIES:\n:ID: x\n:END:\n",
+            "A",
+            0,
+            0,
+        ),
+    ];
+
+    for (input, title, pre_blank, post_blank) in rows {
+        let headline = Org::parse(input)
+            .document()
+            .syntax()
+            .descendants()
+            .filter_map(Headline::cast)
+            .find(|headline| headline.title_raw() == title)
+            .unwrap();
+        assert_eq!(
+            headline.pre_blank(),
+            pre_blank,
+            "pre_blank of {title:?} in {input:?}"
+        );
+        assert_eq!(
+            headline.post_blank(),
+            post_blank,
+            "post_blank of {title:?} in {input:?}"
+        );
     }
 }

@@ -2,7 +2,7 @@ use memchr::memrchr_iter;
 use nom::{
     bytes::complete::take_while1,
     character::complete::{anychar, space0},
-    combinator::{map, opt},
+    combinator::{cond, map, opt},
     sequence::tuple,
     IResult, InputTake, Slice,
 };
@@ -68,14 +68,18 @@ fn headline_node_base(input: Input) -> IResult<Input, GreenElement, ()> {
     }
 
     let (input, planning) = opt(planning_node)(input)?;
+    // Org reads a property drawer only directly under the headline line or
+    // the planning line.
+    let planning_has_post_blank = planning.as_ref().is_some_and(ends_with_blank_line);
     b.push_opt(planning);
 
     if input.is_empty() {
         return Ok((input, b.finish(HEADLINE)));
     }
 
-    let (input, property_drawer) = opt(property_drawer_node)(input)?;
-    b.push_opt(property_drawer);
+    let (input, property_drawer) =
+        cond(!planning_has_post_blank, opt(property_drawer_node))(input)?;
+    b.push_opt(property_drawer.flatten());
 
     let (input, blank) = blank_lines(input)?;
     b.children.extend(blank);
@@ -103,6 +107,13 @@ fn headline_node_base(input: Input) -> IResult<Input, GreenElement, ()> {
     }
 
     Ok((i, b.finish(HEADLINE)))
+}
+
+fn ends_with_blank_line(element: &GreenElement) -> bool {
+    element
+        .as_node()
+        .and_then(|node| node.children().next_back())
+        .is_some_and(|child| child.kind() == BLANK_LINE.into())
 }
 
 #[cfg_attr(
@@ -297,7 +308,7 @@ fn parse() {
       HEADLINE_TITLE@2..5
         TEXT@2..5 "foo"
       NEW_LINE@5..6 "\n"
-      PLANNING@6..34
+      PLANNING@6..35
         PLANNING_SCHEDULED@6..33
           TEXT@6..16 "SCHEDULED:"
           WHITESPACE@16..17 " "
@@ -312,7 +323,7 @@ fn parse() {
             TIMESTAMP_DAYNAME@29..32 "Mon"
             R_ANGLE@32..33 ">"
         NEW_LINE@33..34 "\n"
-      BLANK_LINE@34..35 "\n"
+        BLANK_LINE@34..35 "\n"
       SECTION@35..38
         PARAGRAPH@35..38
           TEXT@35..38 "bar"
@@ -343,6 +354,50 @@ fn parse() {
             WHITESPACE@29..30 " "
             TIMESTAMP_DAYNAME@30..33 "Mon"
             R_ANGLE@33..34 ">"
+    "###
+    );
+
+    // A drawer after the planning line's blank lines is a plain drawer.
+    insta::assert_debug_snapshot!(
+        to_headline("* A\nSCHEDULED: <2019-04-08 Mon>\n\n:PROPERTIES:\n:ID: x\n:END:\n").syntax,
+        @r###"
+    HEADLINE@0..59
+      HEADLINE_STARS@0..1 "*"
+      WHITESPACE@1..2 " "
+      HEADLINE_TITLE@2..3
+        TEXT@2..3 "A"
+      NEW_LINE@3..4 "\n"
+      PLANNING@4..33
+        PLANNING_SCHEDULED@4..31
+          TEXT@4..14 "SCHEDULED:"
+          WHITESPACE@14..15 " "
+          TIMESTAMP_ACTIVE@15..31
+            L_ANGLE@15..16 "<"
+            TIMESTAMP_YEAR@16..20 "2019"
+            MINUS@20..21 "-"
+            TIMESTAMP_MONTH@21..23 "04"
+            MINUS@23..24 "-"
+            TIMESTAMP_DAY@24..26 "08"
+            WHITESPACE@26..27 " "
+            TIMESTAMP_DAYNAME@27..30 "Mon"
+            R_ANGLE@30..31 ">"
+        NEW_LINE@31..32 "\n"
+        BLANK_LINE@32..33 "\n"
+      SECTION@33..59
+        DRAWER@33..59
+          DRAWER_BEGIN@33..46
+            COLON@33..34 ":"
+            TEXT@34..44 "PROPERTIES"
+            COLON@44..45 ":"
+            NEW_LINE@45..46 "\n"
+          DRAWER_CONTENT@46..53
+            PARAGRAPH@46..53
+              TEXT@46..53 ":ID: x\n"
+          DRAWER_END@53..59
+            COLON@53..54 ":"
+            TEXT@54..57 "END"
+            COLON@57..58 ":"
+            NEW_LINE@58..59 "\n"
     "###
     );
 

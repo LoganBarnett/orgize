@@ -155,9 +155,8 @@ fn parse_multiline_link_in_paragraph() {
     use crate::{ast::Link, Org};
     use rowan::ast::AstNode;
 
-    let org = Org::parse(
-        "Here is a [[really really long link\nthat just keeps going]] in prose.\n",
-    );
+    let org =
+        Org::parse("Here is a [[really really long link\nthat just keeps going]] in prose.\n");
 
     let links: Vec<_> = org
         .document()
@@ -166,10 +165,5 @@ fn parse_multiline_link_in_paragraph() {
         .filter_map(Link::cast)
         .collect();
 
-    assert_eq!(
-        links.len(),
-        1,
-        "expected one link, found {}",
-        links.len(),
-    );
+    assert_eq!(links.len(), 1, "expected one link, found {}", links.len(),);
 }

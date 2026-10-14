@@ -4,7 +4,7 @@ use nom::{
 };
 
 use super::{
-    combinator::{eol_or_eof, GreenElement, NodeBuilder},
+    combinator::{blank_lines, eol_or_eof, GreenElement, NodeBuilder},
     input::Input,
     timestamp::{timestamp_active_node, timestamp_inactive_node},
     SyntaxKind::*,
@@ -51,9 +51,11 @@ fn planning_node_base(input: Input) -> IResult<Input, GreenElement, ()> {
     let (input, _) = it.finish()?;
     let (input, ws) = space0(input)?;
     let (input, nl) = eol_or_eof(input)?;
+    let (input, post_blank) = blank_lines(input)?;
 
     b.ws(ws);
     b.nl(nl);
+    b.children.extend(post_blank);
 
     Ok((input, b.finish(PLANNING)))
 }
@@ -81,6 +83,28 @@ fn prase() {
           WHITESPACE@22..23 " "
           TIMESTAMP_DAYNAME@23..26 "Mon"
           R_ANGLE@26..27 ">"
+    "###
+    );
+
+    insta::assert_debug_snapshot!(
+        to_planning("SCHEDULED: <2019-04-08 Mon>\n\n").syntax,
+        @r###"
+    PLANNING@0..29
+      PLANNING_SCHEDULED@0..27
+        TEXT@0..10 "SCHEDULED:"
+        WHITESPACE@10..11 " "
+        TIMESTAMP_ACTIVE@11..27
+          L_ANGLE@11..12 "<"
+          TIMESTAMP_YEAR@12..16 "2019"
+          MINUS@16..17 "-"
+          TIMESTAMP_MONTH@17..19 "04"
+          MINUS@19..20 "-"
+          TIMESTAMP_DAY@20..22 "08"
+          WHITESPACE@22..23 " "
+          TIMESTAMP_DAYNAME@23..26 "Mon"
+          R_ANGLE@26..27 ">"
+      NEW_LINE@27..28 "\n"
+      BLANK_LINE@28..29 "\n"
     "###
     );
 
